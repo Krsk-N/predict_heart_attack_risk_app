@@ -110,7 +110,7 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
         # 5. Конверсия типов данных
         type_map = {
             "int": lambda x: x.astype(int)
-            #"int": lambda x: pd.to_numeric(x, errors='coerce').astype(int)
+            #"int": lambda x: pd.to_numeric(x, errors='coerce')
             #"string": lambda x: x.astype(str)
         }
 

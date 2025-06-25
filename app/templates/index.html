@@ -349,7 +349,7 @@
                 <li><strong>Порог классификации:</strong> {{ config.classification_threshold }}</li>
                 <li><strong>Удаление пропусков:</strong> {{ "Да" if config.drop_na else "Нет" }}</li>
                 {% if config.drop_na %}
-                    <li><strong>Проверяемые столбцы:</strong>
+                    <li><strong>Проверяемые столбцы на пропуски:</strong>
                         {% if config.drop_na_columns == "all" %}Все столбцы{% else %}{{ config.drop_na_columns|join(", ") }}{% endif %}
                     </li>
                 {% endif %}
@@ -465,15 +465,15 @@
                         <div style="flex: 1; background: #f8f8f8; padding: 15px; border-radius: 6px;">
                             <h4>Статистика предсказаний</h4>
                             <p>Всего предсказаний: <strong>{{ count }}</strong></p>
-                            <p>Положительных классов (1):
+                            <p>Высокий риск сердечного приступа (1):
                                 <strong>{{ predictions.count(1) }}</strong>
                                 ({{ (predictions.count(1)/count*100)|round(2) }}%)
-                                <span class="success-badge">Positive</span>
+                                <span class="warning-badge">Positive</span>
                             </p>
-                            <p>Отрицательных классов (0):
+                            <p>Низкий риск сердечного приступа (0):
                                 <strong>{{ predictions.count(0) }}</strong>
                                 ({{ (predictions.count(0)/count*100)|round(2) }}%)
-                                <span class="warning-badge">Negative</span>
+                                <span class="success-badge">Negative</span>
                             </p>
                         </div>
 
@@ -511,7 +511,7 @@
                                 <td>
                                     {{ predictions[i] }}
                                     {% if return_probabilities %}
-                                        <span class="{% if predictions[i] == 1 %}success-badge{% else %}warning-badge{% endif %}">
+                                        <span class="{% if predictions[i] == 1 %}warning-badge{% else %}success-badge{% endif %}">
                                             {% if predictions[i] == 1 %}Positive{% else %}Negative{% endif %}
                                         </span>
                                     {% endif %}
