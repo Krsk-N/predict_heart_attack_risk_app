@@ -10,6 +10,7 @@ import numpy as np
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import logging
+import uuid
 
 app = FastAPI()
 templates = Jinja2Templates(directory="app/templates")
@@ -30,7 +31,7 @@ except Exception as e:
 PREPROCESSING_CONFIG = {
             "drop_columns": ["income", "unnamed_0"], # Столбец для удаления
             "round_columns": ["sleep_hours_per_day"], # Столбец для округления значений
-            "index_column": "id", # Столбeц для перевода в индекс
+            "id_column": "id", # Столбeц для перевода в индекс
             "type_conversions": {   # Конверсия типов данных
                             "diabetes": "int",
                             "family_history": "int",
@@ -120,9 +121,9 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
         logger.info("Type conversions completed")
 
         # 6. Перевод столбца в индексы
-        if PREPROCESSING_CONFIG.get("index_column") and PREPROCESSING_CONFIG["index_column"] in df.columns:
-            df = df.set_index(PREPROCESSING_CONFIG["index_column"])
-        logger.info(f"Set index: {PREPROCESSING_CONFIG['index_column']}")
+        #if PREPROCESSING_CONFIG.get("index_column") and PREPROCESSING_CONFIG["index_column"] in df.columns:
+        #    df = df.set_index(PREPROCESSING_CONFIG["index_column"])
+        #logger.info(f"Set index: {PREPROCESSING_CONFIG['index_column']}")
 
 
 
@@ -143,6 +144,16 @@ def apply_threshold(predictions_proba: np.ndarray) -> np.ndarray:
         logger.error(f"Threshold application error: {str(e)}", exc_info=True)
         raise ValueError(f"Threshold application error: {str(e)}") from e
 
+
+def get_row_ids(df: pd.DataFrame) -> List[str]:
+    """Получение идентификаторов строк"""
+    # Если в конфиге указана колонка с ID
+    id_column = PREPROCESSING_CONFIG.get("id_column")
+    if id_column and id_column in df.columns:
+        return df[id_column].astype(str).tolist()
+
+    # Если нет специальной колонки, используем индекс
+    return [str(i) for i in df.index]
 
 # Модель для API запроса
 class PredictionRequest(BaseModel):
@@ -224,6 +235,9 @@ async def predict_form(request: Request, file_path: str = Form(...),
                 "error": "После предобработки данных не осталось"
             })
 
+        # Получение идентификаторов строк
+        row_ids = get_row_ids(df)
+
         # Выполнение предсказания
         try:
             logger.info("Starting prediction")
@@ -256,21 +270,22 @@ async def predict_form(request: Request, file_path: str = Form(...),
                 "error": f"Ошибка предсказания: {str(e)}"
             })
 
-        # Преобразование предсказаний для вывода
-        try:
-            predictions_list = predictions.tolist()
-            predictions_data_list = predictions_data.tolist() if hasattr(predictions_data, 'tolist') else predictions_data
+        # Создание списка результатов с ID
+        results = []
+        for i, row_id in enumerate(row_ids):
+            result = {
+                "id": row_id,
+                "prediction": float(predictions[i])
+            }
 
-            # Для бинарной классификации подсчитываем классы
-            positive_count = sum(1 for p in predictions_list if p >= 0.5)
-            negative_count = len(predictions_list) - positive_count
-        except Exception as e:
-            logger.error(f"Result conversion error: {str(e)}")
-            return templates.TemplateResponse("index.html", {
-                "request": request,
-                "config": PREPROCESSING_CONFIG,
-                "error": f"Ошибка обработки результатов: {str(e)}"
-            })
+            if return_probabilities:
+                result["probability"] = float(predictions_data[i])
+
+            results.append(result)
+
+        # Подсчет статистики
+        positive_count = sum(1 for r in results if r["prediction"] == 1)
+        negative_count = len(results) - positive_count
 
         # Форматирование результата
         return templates.TemplateResponse("index.html", {
@@ -279,9 +294,8 @@ async def predict_form(request: Request, file_path: str = Form(...),
             "file_path": file_path,
             "original_columns": original_columns,
             "processed_columns": processed_columns,
-            "predictions": predictions_list,
-            "predictions_data": predictions_data_list,
-            "count": len(predictions_list),
+            "results": results,
+            "count": len(results),
             "initial_row_count": initial_row_count,
             "na_removed": na_removed,
             "return_probabilities": return_probabilities,
@@ -329,6 +343,9 @@ async def predict_api(request: PredictionRequest):
         if df.empty:
             raise HTTPException(status_code=400, detail="После предобработки данных не осталось")
 
+        # Получение идентификаторов строк
+        row_ids = get_row_ids(df)
+
         # Выполнение предсказания
         if return_probabilities and hasattr(pipeline, "predict_proba"):
             predictions_proba = pipeline.predict_proba(df)
@@ -346,18 +363,26 @@ async def predict_api(request: PredictionRequest):
             predictions = predictions.astype(float)
             predictions_data = predictions
 
-        # Преобразование результатов
-        predictions_list = predictions.tolist()
-        predictions_data_list = predictions_data.tolist() if hasattr(predictions_data, 'tolist') else predictions_data
+        # Создание списка результатов с ID
+        results = []
+        for i, row_id in enumerate(row_ids):
+            result = {
+                "id": row_id,
+                "prediction": float(predictions[i])
+            }
+
+            if return_probabilities:
+                result["probability"] = float(predictions_data[i])
+
+            results.append(result)
 
         return {
             "file": file_path,
             "original_columns": original_columns,
             "processed_columns": processed_columns,
-            "predictions": predictions_list,
-            "predictions_data": predictions_data_list,
+            "results": results,
             "return_probabilities": return_probabilities,
-            "count": len(predictions_list),
+            "count": len(results),
             "initial_row_count": initial_row_count,
             "na_removed": na_removed,
             "threshold": PREPROCESSING_CONFIG.get("classification_threshold"),

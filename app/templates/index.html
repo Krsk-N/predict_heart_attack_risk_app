@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Предсказания уровня риска возникновения сердечного приступа у пациента</title>
+    <title>Предсказания с ID и предобработкой данных</title>
     <style>
         :root {
             --primary-color: #4CAF50;
@@ -314,13 +314,18 @@
             font-size: 0.8em;
             margin-left: 10px;
         }
+
+        .id-column {
+            font-weight: 600;
+            font-family: monospace;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Предсказания уровня риска возникновения сердечного приступа у пациента</h1>
-            <p class="subtitle">Загрузка CSV → Предобработка → Предсказание</p>
+            <h1>Предсказания риска сердечного приступа по данным о пациентах</h1>
+            <p class="subtitle">Загрузка CSV → Предобработка → Предсказание → Результаты с ID пациента</p>
         </header>
 
         <div class="form-panel">
@@ -346,10 +351,11 @@
         <div class="threshold-info">
             <h3>Конфигурация обработки</h3>
             <ul>
+                <li><strong>ID колонка:</strong> {{ config.id_column if config.id_column else 'Индекс строки' }}</li>
                 <li><strong>Порог классификации:</strong> {{ config.classification_threshold }}</li>
                 <li><strong>Удаление пропусков:</strong> {{ "Да" if config.drop_na else "Нет" }}</li>
                 {% if config.drop_na %}
-                    <li><strong>Проверяемые столбцы на пропуски:</strong>
+                    <li><strong>Проверяемые столбцы:</strong>
                         {% if config.drop_na_columns == "all" %}Все столбцы{% else %}{{ config.drop_na_columns|join(", ") }}{% endif %}
                     </li>
                 {% endif %}
@@ -364,7 +370,7 @@
             </div>
         {% endif %}
 
-        {% if predictions %}
+        {% if results %}
             <div class="panel">
                 <h2>Результаты обработки</h2>
 
@@ -394,8 +400,8 @@
                         <li>Удалены столбцы: {{ config.drop_columns|join(", ") }}</li>
                         {% endif %}
 
-                        {% if config.index_column %}
-                        <li>Столбец '{{ config.index_column }}' преобразован в индекс</li>
+                        {% if config.id_column %}
+                        <li>Использована колонка идентификаторов: '{{ config.id_column }}'</li>
                         {% endif %}
 
                         {% if config.round_to_string_columns %}
@@ -459,20 +465,20 @@
                 </div>
 
                 <div class="predictions" style="margin-top: 30px;">
-                    <h3>Результаты предсказаний</h3>
+                    <h3>Результаты предсказаний с ID пациента</h3>
 
                     <div style="display: flex; gap: 20px; margin-bottom: 20px;">
                         <div style="flex: 1; background: #f8f8f8; padding: 15px; border-radius: 6px;">
                             <h4>Статистика предсказаний</h4>
                             <p>Всего предсказаний: <strong>{{ count }}</strong></p>
                             <p>Высокий риск сердечного приступа (1):
-                                <strong>{{ predictions.count(1) }}</strong>
-                                ({{ (predictions.count(1)/count*100)|round(2) }}%)
+                                <strong>{{ positive_count }}</strong>
+                                ({{ (positive_count/count*100)|round(2) }}%)
                                 <span class="warning-badge">Positive</span>
                             </p>
                             <p>Низкий риск сердечного приступа (0):
-                                <strong>{{ predictions.count(0) }}</strong>
-                                ({{ (predictions.count(0)/count*100)|round(2) }}%)
+                                <strong>{{ negative_count }}</strong>
+                                ({{ (negative_count/count*100)|round(2) }}%)
                                 <span class="success-badge">Negative</span>
                             </p>
                         </div>
@@ -489,6 +495,7 @@
                                     {% endif %}
                                 </strong>
                             </p>
+                            <p>ID колонка: <strong>{{ config.id_column if config.id_column else 'Индекс строки' }}</strong></p>
                         </div>
                     </div>
 
@@ -496,7 +503,7 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>#</th>
+                                <th>ID</th>
                                 <th>Предсказание</th>
                                 {% if return_probabilities %}
                                 <th>Вероятность</th>
@@ -505,26 +512,24 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for i in range(10 if count > 10 else count) %}
+                            {% for item in results[:10] %}
                             <tr>
-                                <td>{{ i + 1 }}</td>
+                                <td class="id-column">{{ item.id }}</td>
                                 <td>
-                                    {{ predictions[i] }}
-                                    {% if return_probabilities %}
-                                        <span class="{% if predictions[i] == 1 %}warning-badge{% else %}success-badge{% endif %}">
-                                            {% if predictions[i] == 1 %}Positive{% else %}Negative{% endif %}
-                                        </span>
-                                    {% endif %}
+                                    {{ item.prediction }}
+                                    <span class="{% if item.prediction == 1 %}warning-badge{% else %}success-badge{% endif %}">
+                                        {% if item.prediction == 1 %}Positive{% else %}Negative{% endif %}
+                                    </span>
                                 </td>
                                 {% if return_probabilities %}
-                                <td class="prob-value">{{ predictions_data[i]|round(4) }}</td>
+                                <td class="prob-value">{{ item.probability|round(4) }}</td>
                                 <td>
                                     <div class="prediction-row">
                                         <div class="prob-bar" style="width: 100%;">
-                                            <div class="prob-fill" style="width: {{ predictions_data[i] * 100 }}%"></div>
+                                            <div class="prob-fill" style="width: {{ item.probability * 100 }}%"></div>
                                         </div>
                                         <div style="width: 50px; text-align: center;">
-                                            {{ (predictions_data[i] * 100)|round(1) }}%
+                                            {{ (item.probability * 100)|round(1) }}%
                                         </div>
                                     </div>
                                 </td>
