@@ -8,9 +8,9 @@ import os
 import re
 import numpy as np
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from typing import Optional, List #Dict, Any
 import logging
-import uuid
+#import uuid
 
 app = FastAPI()
 templates = Jinja2Templates(directory="app/templates")
